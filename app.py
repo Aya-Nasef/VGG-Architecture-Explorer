@@ -93,11 +93,14 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .metric-box .val { font-size: 1.6rem; font-weight: 800; color: #1d4ed8; }
 .metric-box .lbl { font-size: 0.78rem; color: #64748b; margin-top: 2px; }
-.metric-box-green  { background: linear-gradient(135deg,#f0fdf4,#dcfce7) !important; border-color:#86efac !important; }
+.metric-box-green  { background: linear-gradient(135deg,#f0fdf4,#dcfce7) !important;
+                     border-color:#86efac !important; }
 .metric-box-green .val  { color: #16a34a !important; }
-.metric-box-purple { background: linear-gradient(135deg,#faf5ff,#ede9fe) !important; border-color:#c4b5fd !important; }
+.metric-box-purple { background: linear-gradient(135deg,#faf5ff,#ede9fe) !important;
+                     border-color:#c4b5fd !important; }
 .metric-box-purple .val { color: #7c3aed !important; }
-.metric-box-amber  { background: linear-gradient(135deg,#fffbeb,#fef3c7) !important; border-color:#fcd34d !important; }
+.metric-box-amber  { background: linear-gradient(135deg,#fffbeb,#fef3c7) !important;
+                     border-color:#fcd34d !important; }
 .metric-box-amber .val  { color: #d97706 !important; }
 
 .step-indicator { display: flex; gap: 6px; align-items: center; margin-bottom: 1.2rem; }
@@ -133,8 +136,14 @@ html, body, [data-testid="stAppViewContainer"] {
 .footer strong { color: #7dd3fc; }
 
 table.cmp-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-table.cmp-table th { background: #1e3a5f; color: #fff; padding: 0.55rem 0.75rem; text-align: left; }
-table.cmp-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
+table.cmp-table th {
+    background: #1e3a5f; color: #fff;
+    padding: 0.55rem 0.75rem; text-align: left;
+}
+table.cmp-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0; color: #1e293b;
+}
 table.cmp-table tr:nth-child(even) td { background: #f8fafc; }
 
 .arch-flow {
@@ -152,8 +161,12 @@ table.cmp-table tr:nth-child(even) td { background: #f8fafc; }
     background: rgba(255,255,255,0.7); border-radius: 4px;
     margin: 2px 0; display: block; word-break: break-word;
 }
-.arch-box .arch-sub { font-size: 0.6rem; color: #64748b; font-weight: 600; margin-top: 6px; }
-.arch-arrow { font-size: 1.3rem; color: #94a3b8; padding-top: 2rem; flex-shrink: 0; }
+.arch-box .arch-sub {
+    font-size: 0.6rem; color: #64748b; font-weight: 600; margin-top: 6px;
+}
+.arch-arrow {
+    font-size: 1.3rem; color: #94a3b8; padding-top: 2rem; flex-shrink: 0;
+}
 
 .bar-wrap { margin: 8px 0; }
 .bar-row-label { display: flex; justify-content: space-between; margin-bottom: 3px; }
@@ -303,77 +316,118 @@ def fig_to_bytes(fig):
     buf.seek(0); return buf.read()
 
 # ══════════════════════════════════════════════════════════════════
-# MATRIX RENDERING VIA MATPLOTLIB
-# ── This is the key fix: render matrices as PNG images so numbers
-#    always fit perfectly inside cells, with crisp antialiased text.
+# SECTION B — HARMONIOUS MUTED PALETTE
 # ══════════════════════════════════════════════════════════════════
+#
+# All colours are desaturated analogous hues drawn from a single
+# blue-teal-sage-stone palette so every matrix looks like it
+# belongs to the same family.
+#
+# Palette tokens
+# ──────────────
+# bg_page   #f5f6f8   very light cool grey  (figure background)
+# bg_cell   per-type  tinted white           (cell fill, low saturation)
+# border    per-type  slightly deeper tint   (cell edge)
+# hi_edge   #c0392b   muted brick red        (highlight outline)
+# text_dark #2c3e50   dark slate             (numbers on light cells)
+# text_light #f0f4f8  near-white             (numbers on dark cells)
+#
+# Each palette entry:
+#   cmap      – matplotlib colormap name (all low-saturation)
+#   cmap_lo   – lower clamp of cmap (keeps colours from full black)
+#   cmap_hi   – upper clamp of cmap (keeps colours from full white)
+#   border    – cell border colour
+#   hi_edge   – highlight outline colour
+#   figbg     – figure / axes background
 
-# Palette: (face_cmap_name, highlight_color, text_color, border_color)
-MAT_STYLE = {
-    "input":    dict(cmap="Blues",    hi="#ef4444", txt="#0f172a", border="#93c5fd"),
-    "pad":      dict(cmap="Greys",    hi="#ef4444", txt="#1e293b", border="#cbd5e1"),
-    "filter":   dict(cmap="Purples",  hi="#f59e0b", txt="#1e1b4b", border="#a78bfa"),
-    "conv_out": dict(cmap="cool",     hi="#ef4444", txt="#082f49", border="#7dd3fc"),
-    "relu_out": dict(cmap="Greens",   hi="#ef4444", txt="#052e16", border="#86efac"),
-    "pool_out": dict(cmap="YlOrBr",   hi="#ef4444", txt="#451a03", border="#fcd34d"),
-    "highlight":dict(cmap="YlOrRd",   hi="#ef4444", txt="#78350f", border="#fbbf24"),
-    "rf":       dict(cmap="Reds",     hi="#7c3aed", txt="#450a0a", border="#f87171"),
+_P = {
+    # Input image — soft slate-blue
+    "input": dict(
+        cmap="Blues", cmap_lo=0.12, cmap_hi=0.68,
+        border="#a8bdd4", hi_edge="#c0392b", figbg="#eef2f7",
+    ),
+    # Zero-padded — cool grey
+    "pad": dict(
+        cmap="Greys", cmap_lo=0.08, cmap_hi=0.55,
+        border="#b0b8c4", hi_edge="#c0392b", figbg="#f0f2f5",
+    ),
+    # Filter weights — dusty rose / mauve
+    "filter": dict(
+        cmap="RdPu", cmap_lo=0.08, cmap_hi=0.55,
+        border="#c4a4b8", hi_edge="#b45309", figbg="#f7f0f5",
+    ),
+    # Conv output — muted teal
+    "conv_out": dict(
+        cmap="GnBu", cmap_lo=0.10, cmap_hi=0.65,
+        border="#8db8c8", hi_edge="#c0392b", figbg="#edf4f7",
+    ),
+    # ReLU output — sage green
+    "relu_out": dict(
+        cmap="YlGn", cmap_lo=0.12, cmap_hi=0.62,
+        border="#97bda0", hi_edge="#c0392b", figbg="#eef5f0",
+    ),
+    # Pool output — warm sand / amber
+    "pool_out": dict(
+        cmap="YlOrBr", cmap_lo=0.10, cmap_hi=0.58,
+        border="#c8b080", hi_edge="#c0392b", figbg="#f7f3eb",
+    ),
+    # Generic highlight
+    "highlight": dict(
+        cmap="OrRd", cmap_lo=0.10, cmap_hi=0.58,
+        border="#c89080", hi_edge="#7c3aed", figbg="#f7efeb",
+    ),
+    # Receptive-field overlay — soft coral
+    "rf": dict(
+        cmap="PuBuGn", cmap_lo=0.10, cmap_hi=0.65,
+        border="#8ab8b0", hi_edge="#c0392b", figbg="#edf5f3",
+    ),
 }
 
 
-def render_matrix_png(mat: np.ndarray,
-                       palette: str = "input",
-                       highlight_cells: set = None,
-                       highlight_palette: str = "rf",
-                       title: str = "",
-                       fig_scale: float = 0.65) -> bytes:
+def render_matrix_png(
+    mat: np.ndarray,
+    palette: str = "input",
+    highlight_cells: set = None,
+    highlight_palette: str = "rf",   # kept for API compat
+    title: str = "",
+    fig_scale: float = 0.65,
+) -> bytes:
     """
-    Render a 2-D numpy array as a crisp PNG via matplotlib.
-    Each cell is a coloured rectangle with the number perfectly centred.
-    Numbers are ALWAYS legible — matplotlib handles all sizing automatically.
+    Render a 2-D numpy array as a crisp PNG.
 
-    Parameters
-    ----------
-    mat            : 2-D numpy array
-    palette        : colour theme key in MAT_STYLE
-    highlight_cells: set of (row, col) tuples to draw with a red outline
-    highlight_palette: unused (kept for API compat)
-    title          : optional title above the grid
-    fig_scale      : inches per cell (tweak for overall figure size)
+    All colours come from the harmonious muted palette defined in _P so
+    every matrix in Section B looks visually consistent.
     """
     if highlight_cells is None:
         highlight_cells = set()
 
-    style   = MAT_STYLE.get(palette, MAT_STYLE["input"])
+    p      = _P.get(palette, _P["input"])
     nrows, ncols = mat.shape
 
-    # ── Figure size: one square per cell ──────────────────────────
-    fig_w = ncols * fig_scale + 0.3
-    fig_h = nrows * fig_scale + (0.45 if title else 0.1)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor="#f8fafc")
-    ax.set_facecolor("#f8fafc")
+    figbg  = p["figbg"]
+    fig_w  = ncols * fig_scale + 0.35
+    fig_h  = nrows * fig_scale + (0.50 if title else 0.14)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=figbg)
+    ax.set_facecolor(figbg)
 
-    # ── Normalise values 0→1 for colour mapping ───────────────────
     vmin, vmax = float(mat.min()), float(mat.max())
     vrange = max(vmax - vmin, 1e-6)
-    cmap   = plt.get_cmap(style["cmap"])
+    cmap   = plt.get_cmap(p["cmap"])
 
-    gap   = 0.06           # gap between cells (in data units)
-    r_box = 0.10           # corner radius for FancyBboxPatch
+    gap   = 0.07
+    r_box = 0.11
 
     for r in range(nrows):
         for c in range(ncols):
-            v   = mat[r, c]
-            t   = (v - vmin) / vrange          # 0..1
-
-            # Keep backgrounds light (max 55% saturation) so text is readable
-            colour = cmap(0.15 + t * 0.55)
+            v  = mat[r, c]
+            t  = (v - vmin) / vrange                          # 0 → 1
+            t_clamped = p["cmap_lo"] + t * (p["cmap_hi"] - p["cmap_lo"])
+            colour = cmap(t_clamped)
 
             is_hi  = (r, c) in highlight_cells
-            edge_c = "#ef4444" if is_hi else style["border"]
-            lw     = 2.5    if is_hi else 1.0
+            edge_c = p["hi_edge"] if is_hi else p["border"]
+            lw     = 2.2          if is_hi else 0.9
 
-            # Cell rectangle (y axis is inverted later)
             x0 = c + gap / 2
             y0 = (nrows - 1 - r) + gap / 2
             w  = 1 - gap
@@ -389,7 +443,7 @@ def render_matrix_png(mat: np.ndarray,
             )
             ax.add_patch(patch)
 
-            # Format number
+            # Number label
             if abs(v) < 10:
                 label = f"{v:.2f}"
             elif abs(v) < 100:
@@ -397,9 +451,9 @@ def render_matrix_png(mat: np.ndarray,
             else:
                 label = str(int(round(v)))
 
-            # Use dark text on light bg, light text on dark bg
-            luminance = 0.299*colour[0] + 0.587*colour[1] + 0.114*colour[2]
-            txt_col   = "#0f172a" if luminance > 0.45 else "#ffffff"
+            # Perceptual luminance → choose text colour
+            lum = 0.299*colour[0] + 0.587*colour[1] + 0.114*colour[2]
+            txt_col = "#2c3e50" if lum > 0.50 else "#f0f4f8"
 
             ax.text(
                 x0 + w / 2, y0 + h / 2,
@@ -419,7 +473,7 @@ def render_matrix_png(mat: np.ndarray,
 
     if title:
         ax.set_title(title, fontsize=10, fontweight="bold",
-                     color="#1e3a5f", pad=6)
+                     color="#34495e", pad=6)
 
     plt.tight_layout(pad=0.2)
     return fig_to_bytes(fig)
@@ -427,7 +481,6 @@ def render_matrix_png(mat: np.ndarray,
 
 def render_matrix_png_highlighted(mat, palette, highlight_cells,
                                    title="", fig_scale=0.65):
-    """Convenience wrapper that passes highlight_cells through."""
     return render_matrix_png(mat, palette, highlight_cells,
                               title=title, fig_scale=fig_scale)
 
@@ -471,7 +524,8 @@ def section_feature_explorer():
             layer_name = st.selectbox("Select Layer", list(layer_map), index=2)
             n_maps     = st.slider("Number of Feature Maps to Show", 4, 64, 16, 4)
             cmap_choice= st.selectbox("Colormap",
-                                       ["viridis","plasma","inferno","magma","coolwarm","turbo"])
+                                       ["viridis","plasma","inferno","magma",
+                                        "coolwarm","turbo"])
         elif mode == "Compare VGG-16 vs VGG-19 Side-by-Side":
             layer_name  = st.selectbox("Select Conceptual Layer", SHARED_LAYERS, index=0)
             n_maps      = st.slider("Number of Feature Maps to Show", 4, 32, 8, 4)
@@ -505,131 +559,149 @@ def section_feature_explorer():
 
     elif mode == "Compare VGG-16 vs VGG-19 Side-by-Side":
         with st.spinner("Running VGG-16 & VGG-19 forward passes…"):
-            m16=build_fresh_vgg16()
-            acts16=extract_activations(m16,tensor,VGG16_LAYER_MAP[layer_name])
-            probs16=run_full_inference(m16,tensor)
-            m19=build_fresh_vgg19()
-            acts19=extract_activations(m19,tensor,VGG19_LAYER_MAP[layer_name])
-            probs19=run_full_inference(m19,tensor)
+            m16   = build_fresh_vgg16()
+            acts16 = extract_activations(m16, tensor, VGG16_LAYER_MAP[layer_name])
+            probs16 = run_full_inference(m16, tensor)
+            m19   = build_fresh_vgg19()
+            acts19 = extract_activations(m19, tensor, VGG19_LAYER_MAP[layer_name])
+            probs19 = run_full_inference(m19, tensor)
         st.markdown(f'<div class="subsection-title">Layer: {layer_name}</div>',
                     unsafe_allow_html=True)
-        c1,c2=st.columns(2)
-        for col,acts,name,cmap in [(c1,acts16,"VGG-16","viridis"),
-                                    (c2,acts19,"VGG-19","plasma")]:
+        c1, c2 = st.columns(2)
+        for col, acts, name, cmap in [(c1, acts16, "VGG-16", "viridis"),
+                                       (c2, acts19, "VGG-19", "plasma")]:
             with col:
                 st.markdown(f"**{name}**")
                 if acts is not None:
                     _show_activation_stats_inline(acts)
-                    fig=render_feature_maps(acts,n_maps,name,cmap)
-                    st.image(fig_to_bytes(fig),use_container_width=True); plt.close(fig)
-        _show_compare_top3(probs16,probs19)
+                    fig = render_feature_maps(acts, n_maps, name, cmap)
+                    st.image(fig_to_bytes(fig), use_container_width=True)
+                    plt.close(fig)
+        _show_compare_top3(probs16, probs19)
 
     else:
-        lmap=VGG16_LAYER_MAP if model_choice=="VGG-16" else VGG19_LAYER_MAP
-        pool_idx=lmap[pool_name]
+        lmap = VGG16_LAYER_MAP if model_choice=="VGG-16" else VGG19_LAYER_MAP
+        pool_idx = lmap[pool_name]
         with st.spinner("Extracting before/after pooling activations…"):
-            model=build_fresh_vgg16() if model_choice=="VGG-16" else build_fresh_vgg19()
-            acts_pre=extract_activations(model,tensor,pool_idx-1)
-            acts_post=extract_activations(model,tensor,pool_idx)
+            model    = build_fresh_vgg16() if model_choice=="VGG-16" else build_fresh_vgg19()
+            acts_pre  = extract_activations(model, tensor, pool_idx-1)
+            acts_post = extract_activations(model, tensor, pool_idx)
         if acts_pre is None or acts_post is None:
             st.error("Could not extract activations."); return
-        ch=min(channel_idx,acts_pre.shape[0]-1,acts_post.shape[0]-1)
+        ch = min(channel_idx, acts_pre.shape[0]-1, acts_post.shape[0]-1)
         st.markdown(f'<div class="subsection-title">Before vs After: {pool_name}</div>',
                     unsafe_allow_html=True)
-        c1,c2=st.columns(2)
+        c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"**Before MaxPool** — channel {ch}")
             st.caption(f"Shape: {acts_pre.shape[1]}×{acts_pre.shape[2]}")
-            fig=_single_channel_heatmap(acts_pre[ch],"Before (ReLU out)","plasma")
-            st.image(fig_to_bytes(fig),use_container_width=True); plt.close(fig)
+            fig = _single_channel_heatmap(acts_pre[ch], "Before (ReLU out)", "plasma")
+            st.image(fig_to_bytes(fig), use_container_width=True); plt.close(fig)
         with c2:
             st.markdown(f"**After MaxPool** — channel {ch}")
             st.caption(f"Shape: {acts_post.shape[1]}×{acts_post.shape[2]}")
-            fig=_single_channel_heatmap(acts_post[ch],"After MaxPool","viridis")
-            st.image(fig_to_bytes(fig),use_container_width=True); plt.close(fig)
+            fig = _single_channel_heatmap(acts_post[ch], "After MaxPool", "viridis")
+            st.image(fig_to_bytes(fig), use_container_width=True); plt.close(fig)
         st.markdown("""
         <div class="callout"><strong>Key Insight:</strong> After MaxPool the spatial
         resolution halves but the strongest activations are preserved.</div>""",
         unsafe_allow_html=True)
-        _show_top3_predictions(run_full_inference(model,tensor),pool_name,model_choice)
+        _show_top3_predictions(run_full_inference(model, tensor), pool_name, model_choice)
 
     _show_hook_expander()
 
 
-def _single_channel_heatmap(data,title,cmap):
-    fig,ax=plt.subplots(figsize=(4,4),facecolor="#f8fafc")
-    im=ax.imshow(data,cmap=cmap,aspect="auto")
-    ax.set_title(title,fontsize=9,color="#1e3a5f",fontweight="bold")
-    ax.axis("off"); plt.colorbar(im,ax=ax,fraction=0.046,pad=0.04)
+def _single_channel_heatmap(data, title, cmap):
+    fig, ax = plt.subplots(figsize=(4,4), facecolor="#f8fafc")
+    im = ax.imshow(data, cmap=cmap, aspect="auto")
+    ax.set_title(title, fontsize=9, color="#1e3a5f", fontweight="bold")
+    ax.axis("off"); plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     plt.tight_layout(); return fig
 
-def _show_activation_stats(acts,layer_name,model_name):
-    mean_v=float(np.mean(acts)); std_v=float(np.std(acts))
-    max_v=float(np.max(acts)); sparsity=float(np.mean(acts==0)*100)
+def _show_activation_stats(acts, layer_name, model_name):
+    mean_v = float(np.mean(acts)); std_v = float(np.std(acts))
+    max_v  = float(np.max(acts)); sparsity = float(np.mean(acts==0)*100)
     st.markdown(f"""
     <div class="metric-row">
-      <div class="metric-box"><div class="val">{mean_v:.4f}</div><div class="lbl">Mean Activation</div></div>
-      <div class="metric-box metric-box-purple"><div class="val">{std_v:.4f}</div><div class="lbl">Std Deviation</div></div>
-      <div class="metric-box metric-box-green"><div class="val">{max_v:.3f}</div><div class="lbl">Max Activation</div></div>
-      <div class="metric-box metric-box-amber"><div class="val">{sparsity:.1f}%</div><div class="lbl">Sparsity (zeros)</div></div>
+      <div class="metric-box">
+        <div class="val">{mean_v:.4f}</div><div class="lbl">Mean Activation</div>
+      </div>
+      <div class="metric-box metric-box-purple">
+        <div class="val">{std_v:.4f}</div><div class="lbl">Std Deviation</div>
+      </div>
+      <div class="metric-box metric-box-green">
+        <div class="val">{max_v:.3f}</div><div class="lbl">Max Activation</div>
+      </div>
+      <div class="metric-box metric-box-amber">
+        <div class="val">{sparsity:.1f}%</div><div class="lbl">Sparsity (zeros)</div>
+      </div>
     </div>""", unsafe_allow_html=True)
 
 def _show_activation_stats_inline(acts):
-    mean_v=float(np.mean(acts)); std_v=float(np.std(acts))
+    mean_v = float(np.mean(acts)); std_v = float(np.std(acts))
     st.markdown(f"""
     <div class="metric-row">
-      <div class="metric-box" style="min-width:100px"><div class="val" style="font-size:1.1rem">{mean_v:.4f}</div><div class="lbl">Mean</div></div>
-      <div class="metric-box metric-box-purple" style="min-width:100px"><div class="val" style="font-size:1.1rem">{std_v:.4f}</div><div class="lbl">Std</div></div>
+      <div class="metric-box" style="min-width:100px">
+        <div class="val" style="font-size:1.1rem">{mean_v:.4f}</div>
+        <div class="lbl">Mean</div>
+      </div>
+      <div class="metric-box metric-box-purple" style="min-width:100px">
+        <div class="val" style="font-size:1.1rem">{std_v:.4f}</div>
+        <div class="lbl">Std</div>
+      </div>
     </div>""", unsafe_allow_html=True)
 
-def _show_top3_predictions(probs,layer_name,model_name):
-    labels=load_imagenet_labels()
-    top3_idx=np.argsort(probs)[::-1][:3]
-    top3_conf=probs[top3_idx]
-    top3_lbl=[labels[i] if i<len(labels) else f"class_{i}" for i in top3_idx]
+def _show_top3_predictions(probs, layer_name, model_name):
+    labels  = load_imagenet_labels()
+    top3_idx  = np.argsort(probs)[::-1][:3]
+    top3_conf = probs[top3_idx]
+    top3_lbl  = [labels[i] if i<len(labels) else f"class_{i}" for i in top3_idx]
     st.markdown('<div class="subsection-title">🏆 Top-3 ImageNet Predictions</div>',
                 unsafe_allow_html=True)
-    colors=["#1d4ed8","#7c3aed","#0891b2"]
-    html=""
-    for rank,(lbl,conf,color) in enumerate(zip(top3_lbl,top3_conf,colors)):
-        pct=conf*100
-        html+=f"""
+    colors = ["#1d4ed8","#7c3aed","#0891b2"]
+    html = ""
+    for rank, (lbl, conf, color) in enumerate(zip(top3_lbl, top3_conf, colors)):
+        pct = conf * 100
+        html += f"""
         <div style="margin:8px 0">
           <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-weight:600;color:#1e293b">#{rank+1} {lbl.replace('_',' ').title()}</span>
+            <span style="font-weight:600;color:#1e293b">
+              #{rank+1} {lbl.replace('_',' ').title()}</span>
             <span style="font-weight:800;color:{color}">{pct:.2f}%</span>
           </div>
           <div style="background:#e2e8f0;border-radius:6px;height:14px;overflow:hidden">
-            <div style="width:{min(pct,100):.1f}%;background:{color};height:100%;border-radius:6px"></div>
+            <div style="width:{min(pct,100):.1f}%;background:{color};
+                        height:100%;border-radius:6px"></div>
           </div>
         </div>"""
-    st.markdown(f'<div class="card card-green">{html}</div>',unsafe_allow_html=True)
+    st.markdown(f'<div class="card card-green">{html}</div>', unsafe_allow_html=True)
 
-def _show_compare_top3(probs16,probs19):
-    labels=load_imagenet_labels()
+def _show_compare_top3(probs16, probs19):
+    labels = load_imagenet_labels()
     st.markdown('<div class="subsection-title">🏆 Top-3 Predictions Comparison</div>',
                 unsafe_allow_html=True)
-    c1,c2=st.columns(2)
-    for col,probs,name,color in [(c1,probs16,"VGG-16","#1d4ed8"),
-                                  (c2,probs19,"VGG-19","#7c3aed")]:
+    c1, c2 = st.columns(2)
+    for col, probs, name, color in [(c1, probs16, "VGG-16", "#1d4ed8"),
+                                     (c2, probs19, "VGG-19", "#7c3aed")]:
         with col:
-            top3=np.argsort(probs)[::-1][:3]
-            html=f"<div class='card'><b style='color:{color}'>{name}</b>"
-            for i,idx in enumerate(top3):
-                lbl=labels[idx] if idx<len(labels) else f"class_{idx}"
-                pct=probs[idx]*100
-                html+=f"""
+            top3 = np.argsort(probs)[::-1][:3]
+            html = f"<div class='card'><b style='color:{color}'>{name}</b>"
+            for i, idx in enumerate(top3):
+                lbl = labels[idx] if idx<len(labels) else f"class_{idx}"
+                pct = probs[idx]*100
+                html += f"""
                 <div style="margin:6px 0">
                   <div style="display:flex;justify-content:space-between">
                     <span>#{i+1} {lbl.replace('_',' ').title()}</span>
                     <b style="color:{color}">{pct:.2f}%</b>
                   </div>
                   <div style="background:#e2e8f0;border-radius:4px;height:10px">
-                    <div style="width:{min(pct,100):.1f}%;background:{color};height:100%;border-radius:4px"></div>
+                    <div style="width:{min(pct,100):.1f}%;background:{color};
+                                height:100%;border-radius:4px"></div>
                   </div>
                 </div>"""
-            html+="</div>"
-            st.markdown(html,unsafe_allow_html=True)
+            html += "</div>"
+            st.markdown(html, unsafe_allow_html=True)
 
 def _show_hook_expander():
     with st.expander("🔧 How Forward Hooks Work (Annotated Code)"):
@@ -649,8 +721,9 @@ handle.remove()
 feat_maps = activation["feat"][0].numpy()  # [C, H, W]
         ''', language="python")
         st.markdown("""
-        **Thread Safety Note:** We cache only model **state_dicts** (`@st.cache_resource`),
-        not live model objects. Each request creates a fresh model instance.
+        **Thread Safety Note:** We cache only model **state_dicts**
+        (`@st.cache_resource`), not live model objects. Each request creates a
+        fresh model instance.
         """)
 
 
@@ -681,7 +754,7 @@ def _apply_conv(img, filt, pad=1):
             out[r, c] = np.sum(padded[r:r+fh, c:c+fw] * filt)
     return out
 
-def _relu(x):  return np.maximum(0, x)
+def _relu(x): return np.maximum(0, x)
 
 def _maxpool2x2(x):
     H, W = x.shape; out = np.zeros((H//2, W//2))
@@ -691,16 +764,34 @@ def _maxpool2x2(x):
     return out
 
 
-def render_step_indicator(current:int, total:int=6)->str:
-    labels=["Image","Conv","2×3×3","3×3×3","Block","VGG-16"]
-    html='<div class="step-indicator">'
+def render_step_indicator(current: int, total: int = 6) -> str:
+    html = '<div class="step-indicator">'
     for i in range(total):
-        if i>0:
-            html+=f'<div class="step-line {"done" if i<=current else ""}"></div>'
-        cls="done" if i<current else ("active" if i==current else "")
-        html+=f'<div class="step-dot {cls}">{i}</div>'
-    html+="</div>"
+        if i > 0:
+            cls = "done" if i <= current else ""
+            html += f'<div class="step-line {cls}"></div>'
+        cls = "done" if i < current else ("active" if i == current else "")
+        html += f'<div class="step-dot {cls}">{i}</div>'
+    html += "</div>"
     return html
+
+
+# ══════════════════════════════════════════════════════════════════
+# Shared muted colour tokens used in HTML blocks
+# ══════════════════════════════════════════════════════════════════
+# Five harmonious desaturated hues (slate-blue, teal, sage, sand, rose)
+# used consistently across all steps.
+_C = {
+    "slate":  "#4a6785",   # muted steel blue
+    "teal":   "#4a8080",   # desaturated teal
+    "sage":   "#5a7a5a",   # muted sage green
+    "sand":   "#8a7050",   # warm desaturated amber
+    "rose":   "#8a5060",   # dusty rose
+    "text":   "#2c3e50",   # dark slate (body text)
+    "sub":    "#64748b",   # medium grey (captions)
+    "arrow":  "#94a3b8",   # light grey arrow
+    "bg_box": "#f0f4f8",   # very light cool grey for block backgrounds
+}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -717,8 +808,8 @@ def story_step0():
     with col1:
         st.markdown('<div class="subsection-title">Our 8×8 Input Image</div>',
                     unsafe_allow_html=True)
-        img_bytes = render_matrix_png(STAR_8x8, palette="input", fig_scale=0.72)
-        st.image(img_bytes, use_container_width=True)
+        st.image(render_matrix_png(STAR_8x8, palette="input", fig_scale=0.72),
+                 use_container_width=True)
         st.caption("Values: pixel intensities (0 = black, 32 = brightest).")
 
     with col2:
@@ -733,17 +824,29 @@ def story_step0():
         A CNN's job: detect such patterns at different scales and positions.
         </div>""", unsafe_allow_html=True)
 
-        # Coloured preview
-        fig, ax = plt.subplots(figsize=(3, 3), facecolor="#f8fafc")
-        rgb_img = np.zeros((8,8,3), dtype=np.uint8)
+        # Tinted visual preview using the same muted Blues cmap
+        fig, ax = plt.subplots(figsize=(3.2, 3.2), facecolor="#eef2f7")
+        ax.set_facecolor("#eef2f7")
+        cmap_prev = plt.get_cmap("Blues")
+        norm_star = STAR_8x8 / 32.0
         for r in range(8):
             for c in range(8):
-                v = int((STAR_8x8[r,c]/32)*255)
-                rgb_img[r,c] = [255-v, 255-int(v*0.6), 255]
-        ax.imshow(rgb_img, aspect="equal", interpolation="nearest")
-        ax.set_title("Visual Preview", fontsize=10, color="#1e3a5f", fontweight="bold")
-        ax.axis("off"); plt.tight_layout()
-        st.image(fig_to_bytes(fig), use_container_width=True); plt.close(fig)
+                t   = 0.12 + norm_star[r, c] * 0.56
+                col = cmap_prev(t)
+                rect = FancyBboxPatch(
+                    (c+0.05, 7-r+0.05), 0.90, 0.90,
+                    boxstyle="round,pad=0,rounding_size=0.11",
+                    facecolor=col, edgecolor="#a8bdd4",
+                    linewidth=0.8, zorder=1,
+                )
+                ax.add_patch(rect)
+        ax.set_xlim(0, 8); ax.set_ylim(0, 8)
+        ax.set_aspect("equal"); ax.axis("off")
+        ax.set_title("Visual Preview", fontsize=10,
+                     color="#34495e", fontweight="bold", pad=7)
+        plt.tight_layout(pad=0.3)
+        st.image(fig_to_bytes(fig), use_container_width=True)
+        plt.close(fig)
 
     st.markdown("""
     <div class="callout callout-purple">
@@ -781,7 +884,6 @@ def story_step1():
                  use_container_width=True)
         st.caption("Padding=1 keeps output 8×8. VGG always uses padding=1.")
 
-    # ── Animation ──────────────────────────────────────────────────
     st.markdown('<div class="subsection-title">▶ Convolution Animation</div>',
                 unsafe_allow_html=True)
     st.markdown("""
@@ -793,7 +895,8 @@ def story_step1():
 
     c1, c2, c3 = st.columns([1, 1, 2])
     with c1:
-        play = st.button("▶ Play Convolution", key="play_conv1", use_container_width=True)
+        play = st.button("▶ Play Convolution", key="play_conv1",
+                         use_container_width=True)
     with c2:
         stop = st.button("⏹ Stop", key="stop_conv1", use_container_width=True)
     with c3:
@@ -816,21 +919,22 @@ def story_step1():
                 dot_sum = float(np.sum(patch * EDGE_FILTER))
                 partial_out[fr, fc] = conv_out[fr, fc]
 
-                # Build dot-product table for column 3
+                # Muted green for positive products, muted rose for negative
                 dp_lines = []
                 for dr in range(3):
                     for dc in range(3):
-                        prod = patch[dr, dc] * EDGE_FILTER[dr, dc]
-                        col_str = "#15803d" if prod >= 0 else "#dc2626"
+                        prod    = patch[dr, dc] * EDGE_FILTER[dr, dc]
+                        col_str = "#3d6b52" if prod >= 0 else "#8a3a4a"
                         dp_lines.append(
                             f'<span style="color:{col_str};font-weight:700">'
                             f'{patch[dr,dc]:.0f}×({EDGE_FILTER[dr,dc]:.0f})'
                             f'={prod:.1f}</span>'
                         )
                 dp_html = "<br>".join(dp_lines)
+                sum_col = "#4a6785" if dot_sum >= 0 else "#8a5060"
                 dp_html += (
                     f'<hr style="border:1px solid #e2e8f0;margin:4px 0">'
-                    f'<span style="font-weight:800;color:#1d4ed8;font-size:0.9rem">'
+                    f'<span style="font-weight:800;color:{sum_col};font-size:0.9rem">'
                     f'Sum = {dot_sum:.1f}</span>'
                 )
 
@@ -848,14 +952,17 @@ def story_step1():
                             use_container_width=True)
                     with a2:
                         st.caption("Filter")
-                        st.image(render_matrix_png(EDGE_FILTER,"filter",fig_scale=0.85),
-                                 use_container_width=False)
+                        st.image(
+                            render_matrix_png(EDGE_FILTER, "filter", fig_scale=0.85),
+                            use_container_width=False)
                         st.markdown(
-                            f"<div style='text-align:center;font-size:1.4rem;color:#64748b'>⊙</div>",
+                            f"<div style='text-align:center;font-size:1.4rem;"
+                            f"color:{_C['sub']}'>⊙</div>",
                             unsafe_allow_html=True)
                         st.caption(f"Patch [{fr},{fc}]")
-                        st.image(render_matrix_png(patch,"pad",fig_scale=0.85),
-                                 use_container_width=False)
+                        st.image(
+                            render_matrix_png(patch, "pad", fig_scale=0.85),
+                            use_container_width=False)
                     with a3:
                         st.caption("Dot Product")
                         st.markdown(
@@ -863,28 +970,27 @@ def story_step1():
                             unsafe_allow_html=True)
                         st.caption(f"Output — [{fr},{fc}] filled")
                         st.image(
-                            render_matrix_png(partial_out,"conv_out",
+                            render_matrix_png(partial_out, "conv_out",
                                               highlight_cells=hi_out,
                                               fig_scale=0.48),
                             use_container_width=True)
                 time.sleep(speed_ms / 1000.0)
         anim_ph.empty()
 
-    # ── Final result ──────────────────────────────────────────────
     st.markdown('<div class="subsection-title">Convolution Output & ReLU</div>',
                 unsafe_allow_html=True)
     r1, r2, r3 = st.columns(3)
     with r1:
         st.caption("Input (8×8)")
-        st.image(render_matrix_png(STAR_8x8,"input",fig_scale=0.62),
+        st.image(render_matrix_png(STAR_8x8, "input", fig_scale=0.62),
                  use_container_width=True)
     with r2:
         st.caption("Conv Output (8×8)")
-        st.image(render_matrix_png(conv_out,"conv_out",fig_scale=0.62),
+        st.image(render_matrix_png(conv_out, "conv_out", fig_scale=0.62),
                  use_container_width=True)
     with r3:
         st.caption("After ReLU (8×8)")
-        st.image(render_matrix_png(relu_out,"relu_out",fig_scale=0.62),
+        st.image(render_matrix_png(relu_out, "relu_out", fig_scale=0.62),
                  use_container_width=True)
 
     st.markdown("""
@@ -910,25 +1016,28 @@ def story_step2():
     st.markdown('<div class="subsection-title">Two-Pass Feature Maps</div>',
                 unsafe_allow_html=True)
 
-    # Render three matrices side-by-side with arrows using st.columns
     mc1, arr1, mc2, arr2, mc3 = st.columns([3, 0.4, 3, 0.4, 3])
     with mc1:
         st.caption("Input (8×8)")
-        st.image(render_matrix_png(STAR_8x8,"input",fig_scale=0.62),
+        st.image(render_matrix_png(STAR_8x8, "input", fig_scale=0.62),
                  use_container_width=True)
     with arr1:
-        st.markdown("<div style='font-size:2rem;color:#94a3b8;padding-top:2.5rem;text-align:center'>→</div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='font-size:2rem;color:{_C['arrow']};"
+            f"padding-top:2.5rem;text-align:center'>→</div>",
+            unsafe_allow_html=True)
     with mc2:
         st.caption("After Conv1 + ReLU")
-        st.image(render_matrix_png(conv1,"relu_out",fig_scale=0.62),
+        st.image(render_matrix_png(conv1, "relu_out", fig_scale=0.62),
                  use_container_width=True)
     with arr2:
-        st.markdown("<div style='font-size:2rem;color:#94a3b8;padding-top:2.5rem;text-align:center'>→</div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='font-size:2rem;color:{_C['arrow']};"
+            f"padding-top:2.5rem;text-align:center'>→</div>",
+            unsafe_allow_html=True)
     with mc3:
         st.caption("After Conv2 + ReLU")
-        st.image(render_matrix_png(conv2,"conv_out",fig_scale=0.62),
+        st.image(render_matrix_png(conv2, "conv_out", fig_scale=0.62),
                  use_container_width=True)
 
     col1, col2 = st.columns([1, 1], gap="large")
@@ -941,32 +1050,37 @@ def story_step2():
         <em>Conv1's output</em>, which itself depends on 3×3 of the original input.
         Combined: a <strong>5×5 receptive field</strong>.
         </div>""", unsafe_allow_html=True)
-        rf5 = {(3+dr,3+dc) for dr in range(-2,3) for dc in range(-2,3)
-               if 0<=3+dr<8 and 0<=3+dc<8}
-        st.caption("Pixels contributing to output[3,3] — red highlight")
-        st.image(render_matrix_png(STAR_8x8,"input",highlight_cells=rf5,fig_scale=0.62),
+        rf5 = {(3+dr, 3+dc) for dr in range(-2,3) for dc in range(-2,3)
+               if 0 <= 3+dr < 8 and 0 <= 3+dc < 8}
+        st.caption("Pixels contributing to output[3,3] — brick-red outline")
+        st.image(render_matrix_png(STAR_8x8, "input",
+                                   highlight_cells=rf5, fig_scale=0.62),
                  use_container_width=True)
 
     with col2:
         st.markdown('<div class="subsection-title">📊 Parameter Comparison</div>',
                     unsafe_allow_html=True)
-        C   = st.slider("Number of Channels (C)", 1, 64, 32, key="step2_C")
-        p2  = 2*(9*C*C+C); p5=25*C*C+C; sav=(1-p2/p5)*100
+        C  = st.slider("Number of Channels (C)", 1, 64, 32, key="step2_C")
+        p2 = 2*(9*C*C+C); p5 = 25*C*C+C; sav = (1-p2/p5)*100
         st.markdown(f"""
         <div class="metric-row">
           <div class="metric-box metric-box-purple">
-            <div class="val">{p2:,}</div><div class="lbl">Two 3×3 Convs (params)</div>
+            <div class="val">{p2:,}</div>
+            <div class="lbl">Two 3×3 Convs (params)</div>
           </div>
           <div class="metric-box metric-box-amber">
-            <div class="val">{p5:,}</div><div class="lbl">One 5×5 Conv (params)</div>
+            <div class="val">{p5:,}</div>
+            <div class="lbl">One 5×5 Conv (params)</div>
           </div>
           <div class="metric-box metric-box-green">
-            <div class="val">{sav:.1f}%</div><div class="lbl">Parameter Savings</div>
+            <div class="val">{sav:.1f}%</div>
+            <div class="lbl">Parameter Savings</div>
           </div>
         </div>
         <div class="callout callout-green">
-        <strong>Result:</strong> Same receptive field, <strong>{sav:.1f}% fewer
-        parameters</strong> at C={C}, plus two ReLUs instead of one.
+        <strong>Result:</strong> Same receptive field,
+        <strong>{sav:.1f}% fewer parameters</strong> at C={C},
+        plus two ReLUs instead of one.
         </div>""", unsafe_allow_html=True)
 
 
@@ -987,7 +1101,6 @@ def story_step3():
     st.markdown('<div class="subsection-title">Three Conv Passes</div>',
                 unsafe_allow_html=True)
 
-    # Four matrices with arrows
     mc1,a1,mc2,a2,mc3,a3,mc4 = st.columns([3,0.35,3,0.35,3,0.35,3])
     pairs = [
         (mc1, STAR_8x8, "input",    "Input"),
@@ -995,30 +1108,31 @@ def story_step3():
         (mc3, conv2,    "relu_out", "After Conv2+ReLU"),
         (mc4, conv3,    "conv_out", "After Conv3+ReLU"),
     ]
-    arrows = [a1, a2, a3]
     for col, mat, pal, cap in pairs:
         with col:
             st.caption(cap)
             st.image(render_matrix_png(mat, pal, fig_scale=0.55),
                      use_container_width=True)
-    for arr_col in arrows:
+    for arr_col in [a1, a2, a3]:
         with arr_col:
             st.markdown(
-                "<div style='font-size:1.8rem;color:#94a3b8;padding-top:2.5rem;"
-                "text-align:center'>→</div>", unsafe_allow_html=True)
+                f"<div style='font-size:1.8rem;color:{_C['arrow']};"
+                f"padding-top:2.5rem;text-align:center'>→</div>",
+                unsafe_allow_html=True)
 
     st.markdown('<div class="subsection-title">7×7 Receptive Field</div>',
                 unsafe_allow_html=True)
     col1, col2 = st.columns([1, 1], gap="large")
     with col1:
-        rf7 = {(3+dr,3+dc) for dr in range(-3,4) for dc in range(-3,4)
-               if 0<=3+dr<8 and 0<=3+dc<8}
-        st.caption("7×7 receptive field of output[3,3] (red)")
-        st.image(render_matrix_png(STAR_8x8,"input",highlight_cells=rf7,fig_scale=0.62),
+        rf7 = {(3+dr, 3+dc) for dr in range(-3,4) for dc in range(-3,4)
+               if 0 <= 3+dr < 8 and 0 <= 3+dc < 8}
+        st.caption("7×7 receptive field of output[3,3]")
+        st.image(render_matrix_png(STAR_8x8, "input",
+                                   highlight_cells=rf7, fig_scale=0.62),
                  use_container_width=True)
     with col2:
-        C   = st.slider("Number of Channels (C)", 1, 64, 32, key="step3_C")
-        p3  = 3*(9*C*C+C); p7=49*C*C+C; sav=(1-p3/p7)*100
+        C  = st.slider("Number of Channels (C)", 1, 64, 32, key="step3_C")
+        p3 = 3*(9*C*C+C); p7 = 49*C*C+C; sav = (1-p3/p7)*100
         st.markdown(f"""
         <div class="metric-row">
           <div class="metric-box metric-box-purple">
@@ -1038,7 +1152,7 @@ def story_step3():
     st.markdown("""
     <div class="callout callout-purple">
     <strong>VGG Core Insight:</strong> RF grows +2 per 3×3 layer:<br>
-    1 conv→3×3 | 2 convs→5×5 | 3 convs→7×7<br><br>
+    1 conv → 3×3 &nbsp;|&nbsp; 2 convs → 5×5 &nbsp;|&nbsp; 3 convs → 7×7<br><br>
     Blocks 3–5 stack three (VGG-16) or four (VGG-19) 3×3 convolutions.
     </div>""", unsafe_allow_html=True)
 
@@ -1061,19 +1175,17 @@ def story_step4():
     c1, c2, c3 = st.columns(3)
     with c1:
         st.caption("After Conv1+ReLU (8×8)")
-        st.image(render_matrix_png(conv1,"relu_out",fig_scale=0.62),
+        st.image(render_matrix_png(conv1, "relu_out", fig_scale=0.62),
                  use_container_width=True)
     with c2:
         st.caption("After Conv2+ReLU (8×8)")
-        st.image(render_matrix_png(conv2,"conv_out",fig_scale=0.62),
+        st.image(render_matrix_png(conv2, "conv_out", fig_scale=0.62),
                  use_container_width=True)
     with c3:
         st.caption("After MaxPool (4×4)")
-        # 4×4 → use larger fig_scale so numbers are very clear
-        st.image(render_matrix_png(pool,"pool_out",fig_scale=0.90),
+        st.image(render_matrix_png(pool, "pool_out", fig_scale=0.90),
                  use_container_width=True)
 
-    # ── MaxPool animation ──────────────────────────────────────────
     st.markdown('<div class="subsection-title">▶ MaxPool Animation</div>',
                 unsafe_allow_html=True)
     btn_col, info_col = st.columns([1, 3])
@@ -1099,42 +1211,51 @@ def story_step4():
                     with pa:
                         st.caption("Conv2 out (pool window highlighted)")
                         st.image(
-                            render_matrix_png(conv2,"conv_out",
-                                              highlight_cells=hi,fig_scale=0.60),
+                            render_matrix_png(conv2, "conv_out",
+                                              highlight_cells=hi, fig_scale=0.60),
                             use_container_width=True)
                     with pb:
                         st.caption("Pool output (building…)")
                         st.image(
-                            render_matrix_png(partial_pool,"pool_out",fig_scale=0.90),
+                            render_matrix_png(partial_pool, "pool_out",
+                                              fig_scale=0.90),
                             use_container_width=True)
                 time.sleep(0.35)
         pool_ph.empty()
 
-    # ── Channel doubling ──────────────────────────────────────────
+    # ── Channel doubling — muted palette chips ──────────────────────
     st.markdown('<div class="subsection-title">📈 Channel Doubling Pattern</div>',
                 unsafe_allow_html=True)
-    blocks = [
-        ("Input","224×224","3","#475569"),("Block 1","112×112","64","#1d4ed8"),
-        ("Block 2","56×56","128","#7c3aed"),("Block 3","28×28","256","#be185d"),
-        ("Block 4","14×14","512","#b45309"),("Block 5","7×7","512","#15803d"),
-        ("FC","1×1","4096","#ef4444"),
+
+    # Desaturated, harmonious chip colours drawn from the _C palette family
+    chips = [
+        ("Input",   "224×224", "3",    "#5a6472", "#dde2e8"),  # slate grey
+        ("Block 1", "112×112", "64",   "#3d5a80", "#d6e4f0"),  # muted navy
+        ("Block 2", "56×56",   "128",  "#4a6080", "#d0dce8"),  # steel blue
+        ("Block 3", "28×28",   "256",  "#4a7080", "#cce0e8"),  # slate teal
+        ("Block 4", "14×14",   "512",  "#4a7060", "#cce4d8"),  # sage teal
+        ("Block 5", "7×7",     "512",  "#5a7050", "#d4e2cc"),  # olive sage
+        ("FC",      "1×1",     "4096", "#7a5060", "#e8d4da"),  # dusty rose
     ]
-    inner=""
-    for i,(name,size,ch,color) in enumerate(blocks):
-        if i>0:
-            inner+=('<div style="font-size:1.4rem;color:#94a3b8;'
-                    'padding-top:1.5rem;flex-shrink:0">→</div>')
-        inner+=f"""
-        <div style="background:{color};color:#fff;border-radius:10px;
-                    padding:0.6rem 0.9rem;text-align:center;min-width:72px;
-                    flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.15)">
+    inner = ""
+    for i, (name, size, ch, fg, bg) in enumerate(chips):
+        if i > 0:
+            inner += (f'<div style="font-size:1.3rem;color:{_C["arrow"]};'
+                      f'padding-top:1.4rem;flex-shrink:0">→</div>')
+        inner += f"""
+        <div style="background:{bg};color:{fg};border:1.5px solid {fg}55;
+                    border-radius:10px;padding:0.55rem 0.8rem;text-align:center;
+                    min-width:72px;flex-shrink:0;
+                    box-shadow:0 2px 6px rgba(0,0,0,0.08)">
           <div style="font-weight:800;font-size:0.95rem">{ch}ch</div>
-          <div style="font-size:0.68rem;opacity:0.9">{name}</div>
-          <div style="font-size:0.62rem;opacity:0.75">{size}</div>
+          <div style="font-size:0.68rem;opacity:0.85;margin-top:2px">{name}</div>
+          <div style="font-size:0.62rem;opacity:0.65;margin-top:1px">{size}</div>
         </div>"""
     st.markdown(
         f'<div style="display:flex;align-items:center;flex-wrap:wrap;'
-        f'gap:4px;margin:1rem 0;overflow:visible">{inner}</div>',
+        f'gap:5px;margin:1rem 0;overflow:visible;padding:0.75rem;'
+        f'background:{_C["bg_box"]};border-radius:12px;'
+        f'border:1px solid #dde2e8">{inner}</div>',
         unsafe_allow_html=True)
 
     st.markdown("""
@@ -1157,31 +1278,47 @@ def story_step5():
     st.markdown('<div class="subsection-title">🏗️ VGG-16 Architecture Diagram</div>',
                 unsafe_allow_html=True)
 
-    blocks_spec=[
-        {"label":"Input",     "sub":"224×224×3",    "ops":["RGB Image"],
+    blocks_spec = [
+        {"label":"Input",      "sub":"224×224×3",
+         "ops":["RGB Image"],
          "color":"#475569","bg":"#f1f5f9"},
-        {"label":"Block 1",   "sub":"224→112×64",   "ops":["Conv 3×3 (64)","ReLU","Conv 3×3 (64)","ReLU","MaxPool 2×2"],
+        {"label":"Block 1",    "sub":"224→112×64",
+         "ops":["Conv 3×3 (64)","ReLU","Conv 3×3 (64)","ReLU","MaxPool 2×2"],
          "color":"#1d4ed8","bg":"#eff6ff"},
-        {"label":"Block 2",   "sub":"112→56×128",   "ops":["Conv 3×3 (128)","ReLU","Conv 3×3 (128)","ReLU","MaxPool 2×2"],
+        {"label":"Block 2",    "sub":"112→56×128",
+         "ops":["Conv 3×3 (128)","ReLU","Conv 3×3 (128)","ReLU","MaxPool 2×2"],
          "color":"#7c3aed","bg":"#faf5ff"},
-        {"label":"Block 3",   "sub":"56→28×256",    "ops":["Conv 3×3 (256) ×3","ReLU ×3","MaxPool 2×2"],
+        {"label":"Block 3",    "sub":"56→28×256",
+         "ops":["Conv 3×3 (256) ×3","ReLU ×3","MaxPool 2×2"],
          "color":"#be185d","bg":"#fdf2f8"},
-        {"label":"Block 4",   "sub":"28→14×512",    "ops":["Conv 3×3 (512) ×3","ReLU ×3","MaxPool 2×2"],
+        {"label":"Block 4",    "sub":"28→14×512",
+         "ops":["Conv 3×3 (512) ×3","ReLU ×3","MaxPool 2×2"],
          "color":"#b45309","bg":"#fffbeb"},
-        {"label":"Block 5",   "sub":"14→7×512",     "ops":["Conv 3×3 (512) ×3","ReLU ×3","MaxPool 2×2"],
+        {"label":"Block 5",    "sub":"14→7×512",
+         "ops":["Conv 3×3 (512) ×3","ReLU ×3","MaxPool 2×2"],
          "color":"#15803d","bg":"#f0fdf4"},
-        {"label":"Classifier","sub":"→1000 classes","ops":["Flatten","FC 4096+ReLU","Dropout 0.5","FC 4096+ReLU","Dropout 0.5","FC 1000","Softmax"],
+        {"label":"Classifier", "sub":"→1000 classes",
+         "ops":["Flatten","FC 4096+ReLU","Dropout 0.5",
+                "FC 4096+ReLU","Dropout 0.5","FC 1000","Softmax"],
          "color":"#b91c1c","bg":"#fef2f2"},
     ]
-    arch='<div class="arch-flow">'
-    for i,blk in enumerate(blocks_spec):
-        if i>0: arch+='<div class="arch-arrow">→</div>'
-        ops_html="".join(f'<div class="arch-op" style="color:{blk["color"]}">{op}</div>'
-                         for op in blk["ops"])
-        arch+=(f'<div class="arch-box" style="background:{blk["bg"]};border-color:{blk["color"]}">'
-               f'<div class="arch-label" style="color:{blk["color"]}">{blk["label"]}</div>'
-               f'{ops_html}<div class="arch-sub">{blk["sub"]}</div></div>')
-    arch+="</div>"
+    arch = '<div class="arch-flow">'
+    for i, blk in enumerate(blocks_spec):
+        if i > 0:
+            arch += '<div class="arch-arrow">→</div>'
+        ops_html = "".join(
+            f'<div class="arch-op" style="color:{blk["color"]}">{op}</div>'
+            for op in blk["ops"]
+        )
+        arch += (
+            f'<div class="arch-box" style="background:{blk["bg"]};'
+            f'border-color:{blk["color"]}">'
+            f'<div class="arch-label" style="color:{blk["color"]}">'
+            f'{blk["label"]}</div>'
+            f'{ops_html}'
+            f'<div class="arch-sub">{blk["sub"]}</div></div>'
+        )
+    arch += "</div>"
     st.markdown(arch, unsafe_allow_html=True)
 
     st.markdown('<div class="subsection-title">📋 VGG-16 vs VGG-19 Comparison</div>',
@@ -1200,34 +1337,46 @@ def story_step5():
       <tr><td>ImageNet Top-5</td><td>90.4%</td><td>90.9%</td></tr>
     </table>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="subsection-title">🏆 Simulated Mini-VGG Classification</div>',
-                unsafe_allow_html=True)
-    sim_classes=["Star","Spiral","Cross","Diamond","Circle"]
-    sim_probs=[82,8,5,3,2]
-    bar_colors=["#1d4ed8","#7c3aed","#10b981","#f59e0b","#ef4444"]
-    bars=""
-    for cls,prob,color in zip(sim_classes,sim_probs,bar_colors):
-        bars+=f"""
+    st.markdown(
+        '<div class="subsection-title">🏆 Simulated Mini-VGG Classification</div>',
+        unsafe_allow_html=True)
+
+    sim_classes = ["Star","Spiral","Cross","Diamond","Circle"]
+    sim_probs   = [82, 8, 5, 3, 2]
+    # Muted, harmonious bar colours matching the _C palette
+    bar_colors  = [
+        _C["slate"],  # steel blue
+        _C["teal"],   # desaturated teal
+        _C["sage"],   # sage green
+        _C["sand"],   # warm sand
+        _C["rose"],   # dusty rose
+    ]
+    bars = ""
+    for cls, prob, color in zip(sim_classes, sim_probs, bar_colors):
+        bars += f"""
         <div class="bar-wrap">
           <div class="bar-row-label">
-            <span>{cls}</span><b style="color:{color}">{prob}%</b>
+            <span style="color:{_C['text']}">{cls}</span>
+            <b style="color:{color}">{prob}%</b>
           </div>
           <div class="bar-bg">
             <div class="bar-fill" style="width:{prob}%;background:{color}"></div>
           </div>
         </div>"""
-    st.markdown(f'<div class="card card-green" style="max-width:500px">{bars}</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="card card-green" style="max-width:500px">{bars}</div>',
+        unsafe_allow_html=True)
 
     st.markdown("""
     <div class="card card-blue" style="margin-top:1.5rem">
     <h3 style="color:#1d4ed8;margin-bottom:0.8rem">🎓 What VGG Taught the World</h3>
     <ul style="color:#1e293b;line-height:1.9;padding-left:1.2rem">
-      <li><strong>Depth beats large filters</strong> — 3×3 stacks outperform large filters
-          in accuracy <em>and</em> efficiency.</li>
+      <li><strong>Depth beats large filters</strong> — 3×3 stacks outperform large
+          filters in accuracy <em>and</em> efficiency.</li>
       <li><strong>Uniform architecture</strong> — only 3×3 convolutions throughout.</li>
       <li><strong>More layers, more abstractions</strong> — edges→textures→objects.</li>
-      <li><strong>Lives on</strong> — ResNets and transformers borrow the same insight.</li>
+      <li><strong>Lives on</strong> — ResNets and transformers borrow the same insight.
+          </li>
     </ul>
     <p style="color:#64748b;margin-bottom:0;font-size:0.85rem;margin-top:0.8rem">
     Simonyan &amp; Zisserman, ICLR 2015.
@@ -1239,13 +1388,15 @@ def story_step5():
 # SECTION B WRAPPER
 # ══════════════════════════════════════════════════════════════════
 def section_vgg_story():
-    st.markdown('<div class="section-title">📖 The VGG Story – The Power of 3×3</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">📖 The VGG Story – The Power of 3×3</div>',
+        unsafe_allow_html=True)
     if "story_step" not in st.session_state:
         st.session_state.story_step = 0
-    step=st.session_state.story_step; total_steps=6
-    st.markdown(render_step_indicator(step,total_steps), unsafe_allow_html=True)
-    step_titles=[
+    step = st.session_state.story_step
+    total_steps = 6
+    st.markdown(render_step_indicator(step, total_steps), unsafe_allow_html=True)
+    step_titles = [
         "Step 0 – The 8×8 Image",
         "Step 1 – A Single 3×3 Convolution",
         "Step 2 – Two 3×3 = 5×5 Receptive Field",
@@ -1255,29 +1406,30 @@ def section_vgg_story():
     ]
     st.markdown(f"<h3 style='color:#1e3a5f;margin-bottom:0.5rem'>"
                 f"{step_titles[step]}</h3>", unsafe_allow_html=True)
-    [story_step0,story_step1,story_step2,
-     story_step3,story_step4,story_step5][step]()
+    [story_step0, story_step1, story_step2,
+     story_step3, story_step4, story_step5][step]()
 
     st.markdown("<br>", unsafe_allow_html=True)
-    nav1,nav2,nav3=st.columns([1,3,1])
+    nav1, nav2, nav3 = st.columns([1, 3, 1])
     with nav1:
-        if step>0:
-            if st.button("◀ Previous",key="prev_step",use_container_width=True):
-                st.session_state.story_step-=1; st.rerun()
+        if step > 0:
+            if st.button("◀ Previous", key="prev_step", use_container_width=True):
+                st.session_state.story_step -= 1; st.rerun()
     with nav2:
-        pct=int((step/(total_steps-1))*100)
+        pct = int((step / (total_steps-1)) * 100)
         st.markdown(f"""
-        <div style="text-align:center;color:#64748b;font-size:0.85rem;padding-top:0.5rem">
+        <div style="text-align:center;color:#64748b;
+                    font-size:0.85rem;padding-top:0.5rem">
           Progress: <strong style="color:#1d4ed8">{pct}%</strong>
           &nbsp;—&nbsp; Step {step+1} of {total_steps}
         </div>""", unsafe_allow_html=True)
     with nav3:
-        if step<total_steps-1:
-            if st.button("Next ▶",key="next_step",use_container_width=True):
-                st.session_state.story_step+=1; st.rerun()
+        if step < total_steps - 1:
+            if st.button("Next ▶", key="next_step", use_container_width=True):
+                st.session_state.story_step += 1; st.rerun()
         else:
-            if st.button("↺ Restart",key="restart_step",use_container_width=True):
-                st.session_state.story_step=0; st.rerun()
+            if st.button("↺ Restart", key="restart_step", use_container_width=True):
+                st.session_state.story_step = 0; st.rerun()
 
 
 # ──────────────────────────────────────────────
@@ -1293,9 +1445,9 @@ def render_sidebar():
             Interactive CNN Education</div>
         </div>
         <hr style="border-color:#334155;margin:0.8rem 0">""", unsafe_allow_html=True)
-        section=st.radio("Navigate to",
-                          ["🔬 Feature Map Explorer","📖 The VGG Story"],
-                          key="nav_section")
+        section = st.radio("Navigate to",
+                            ["🔬 Feature Map Explorer", "📖 The VGG Story"],
+                            key="nav_section")
         st.markdown("<hr style='border-color:#334155;margin:0.8rem 0'>",
                     unsafe_allow_html=True)
         st.markdown("""
@@ -1333,12 +1485,12 @@ def render_footer():
 
 def main():
     render_hero()
-    section=render_sidebar()
-    if section=="🔬 Feature Map Explorer":
+    section = render_sidebar()
+    if section == "🔬 Feature Map Explorer":
         section_feature_explorer()
     else:
         section_vgg_story()
     render_footer()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
